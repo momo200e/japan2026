@@ -15,27 +15,32 @@
             color: #374151; /* Gray 700 */
             -webkit-tap-highlight-color: transparent;
             padding-bottom: 120px;
-            /* 關鍵：移除全域 smooth 行為，讓 JS 控制點擊時的平滑，手指滑動則依賴原生慣性 */
+            /* 保持原生滾動慣性 */
             line-height: 1.8;
+            overscroll-behavior-y: none;
         }
 
         html {
-            /* 關鍵優化： */
-            /* 1. proximity: 只有接近時才吸附 (用力滑動時觸發)，解決黏滯感 */
-            /* 2. y: 僅垂直方向 */
+            /* 磁吸：接近時才吸附 */
             scroll-snap-type: y proximity; 
+            scroll-padding-top: 160px;
         }
 
-        /* 隱藏捲軸但保留功能 */
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-        /* 頂部固定導航 */
         .sticky-header {
             background: rgba(255, 255, 255, 0.98);
             backdrop-filter: blur(10px);
             -webkit-backdrop-filter: blur(10px);
             box-shadow: 0 4px 10px -2px rgba(0, 0, 0, 0.05);
+        }
+
+        /* 修正 1：定義通用的磁吸對齊樣式，給 2/2 標題使用 */
+        .snap-point {
+            scroll-snap-align: start; 
+            scroll-margin-top: 150px; 
+            scroll-snap-stop: normal;
         }
 
         /* 卡片設計 */
@@ -51,20 +56,20 @@
             transform: scale(1);
             opacity: 0.95;
             
-            /* 關鍵優化：解決衝突 */
-            /* 1. start: 對齊視窗頂部 (跟 JS 錨點位置一致) */
+            overflow: visible; 
+            transform: translateZ(0);
+            will-change: transform; 
+
+            /* 包含磁吸設定 */
             scroll-snap-align: start; 
-            /* 2. margin-top: 150px (預留 Header 高度 + 緩衝，與 JS 變數完全一致) */
             scroll-margin-top: 150px; 
-            
             scroll-snap-stop: normal;
         }
 
-        /* 當前進度高亮樣式 */
         .card.active-highlight {
             border: 2px solid #3b82f6;
             box-shadow: 0 10px 30px rgba(59, 130, 246, 0.15);
-            transform: scale(1.02); 
+            transform: scale(1.02) translateZ(0); 
             z-index: 10;
             opacity: 1;
         }
@@ -81,11 +86,11 @@
             font-size: 0.75rem;
             font-weight: bold;
             box-shadow: 0 4px 6px rgba(0,0,0,0.15);
+            z-index: 20;
             animation: bounce 2s infinite;
         }
         .card.active-highlight .current-badge { display: block; }
 
-        /* 時間軸樣式 */
         .timeline-container {
             position: relative;
             padding-left: 20px;
@@ -105,11 +110,10 @@
             z-index: 10;
         }
 
-        /* 時間標籤 */
         .time-badge {
             display: inline-block;
-            background-color: #dbeafe; /* Blue 100 */
-            color: #1e40af; /* Blue 800 */
+            background-color: #dbeafe;
+            color: #1e40af;
             font-size: 0.8rem;
             font-weight: 700;
             padding: 1px 8px;
@@ -120,7 +124,6 @@
             font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
         }
 
-        /* 按鈕與連結 */
         .nav-item {
             white-space: nowrap;
             padding: 14px 16px;
@@ -151,6 +154,7 @@
             border: 1px solid #bbf7d0;
             font-size: 0.9rem;
             transition: background 0.2s;
+            touch-action: manipulation;
         }
         .map-btn:hover { background-color: #dcfce7; }
 
@@ -170,13 +174,26 @@
             width: 100%;
             transition: all 0.2s;
             font-size: 0.95rem;
+            touch-action: manipulation;
         }
         .route-btn:active { transform: scale(0.98); background-color: #dbeafe; }
         
         .route-btn-sm {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            background-color: #eff6ff;
+            color: #1d4ed8;
+            border: 1px dashed #bfdbfe;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
             padding: 8px 12px;
             margin-top: 8px;
             font-size: 0.85rem;
+            width: 100%;
+            touch-action: manipulation;
         }
 
         .time-pill-header {
@@ -195,7 +212,6 @@
             border: 1px solid #e2e8f0;
         }
         
-        /* Checkbox */
         .custom-checkbox {
             display: flex;
             align-items: flex-start;
@@ -219,7 +235,7 @@
             color: #9ca3af;
         }
 
-        /* Modal & Lightbox */
+        /* Modal */
         .modal-overlay {
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -240,10 +256,11 @@
             overflow-y: auto;
             position: relative;
             padding: 24px;
-            animation: zoomIn 0.25s;
+            animation: zoomIn 0.2s;
             box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
         }
 
+        /* Lightbox */
         .lightbox {
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -253,16 +270,35 @@
             align-items: center;
             justify-content: center;
             flex-direction: column;
+            overflow: hidden;
         }
+        
+        .lightbox-container {
+            width: 100%;
+            height: 90%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            position: relative;
+        }
+
         .lightbox img {
             max-width: 95%;
-            max-height: 85%;
+            max-height: 95%;
             border-radius: 4px;
             box-shadow: 0 0 20px rgba(0,0,0,0.5);
             object-fit: contain;
+            transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            cursor: grab;
+            transform-origin: center center;
+            user-select: none;
+        }
+        
+        .lightbox img.zoomed {
+            cursor: grabbing;
         }
 
-        /* Utils */
         img.content-img {
             border-radius: 12px;
             border: 1px solid #e5e7eb;
@@ -272,6 +308,7 @@
             height: auto;
             object-fit: cover;
         }
+        
         .toast {
             position: fixed;
             bottom: 30px;
@@ -388,7 +425,7 @@
         </section>
 
         <section id="feb2" class="tab-content hidden">
-            <div class="bg-gradient-to-br from-blue-700 to-indigo-800 p-6 rounded-2xl mb-10 shadow-xl text-white relative overflow-hidden">
+            <div class="bg-gradient-to-br from-blue-700 to-indigo-800 p-6 rounded-2xl mb-10 shadow-xl text-white relative overflow-hidden snap-point">
                 <div class="relative z-10">
                     <h2 class="text-2xl font-bold">📅 2/2 (一) 紅眼特攻</h2>
                     <p class="opacity-90 mt-1 text-lg">直衝越後湯澤滑雪去</p>
@@ -1189,8 +1226,10 @@
     </div>
 
     <div id="lightbox" class="lightbox" onclick="closeLightbox()">
-        <img id="lightboxImg" src="" alt="Full size">
-        <p class="text-white mt-4 text-sm bg-black/50 px-3 py-1 rounded">點擊任意處關閉</p>
+        <div class="lightbox-container" onmousedown="startDrag(event)" ontouchstart="startDrag(event)" onmousemove="drag(event)" ontouchmove="drag(event)" onmouseup="endDrag()" ontouchend="endDrag()" onmouseleave="endDrag()">
+             <img id="lightboxImg" src="" alt="Full size" onclick="toggleZoom(event)">
+        </div>
+        <p class="text-white mt-4 text-sm bg-black/50 px-3 py-1 rounded absolute bottom-8">點擊放大/縮小 • 拖曳移動 • 點擊背景關閉</p>
     </div>
 
     <div id="toast" class="toast">
@@ -1198,19 +1237,70 @@
     </div>
 
     <script>
-        // --- Tab Logic ---
+        // --- Lightbox Logic (Zoom & Pan) ---
+        let scale = 1;
+        let pointX = 0;
+        let pointY = 0;
+        let startX = 0;
+        let startY = 0;
+        let isDragging = false;
+        const img = document.getElementById('lightboxImg');
+
+        function toggleZoom(e) {
+            e.stopPropagation(); // Prevent closing lightbox
+            if (scale === 1) {
+                scale = 2.5;
+                img.classList.add('zoomed');
+            } else {
+                scale = 1;
+                pointX = 0;
+                pointY = 0;
+                img.classList.remove('zoomed');
+            }
+            updateTransform();
+        }
+
+        function startDrag(e) {
+            if (scale === 1) return;
+            isDragging = true;
+            startX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX;
+            startY = e.type.includes('mouse') ? e.clientY : e.touches[0].clientY;
+        }
+
+        function drag(e) {
+            if (!isDragging || scale === 1) return;
+            e.preventDefault();
+            const currentX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX;
+            const currentY = e.type.includes('mouse') ? e.clientY : e.touches[0].clientY;
+            const diffX = currentX - startX;
+            const diffY = currentY - startY;
+            
+            pointX += diffX;
+            pointY += diffY;
+            startX = currentX;
+            startY = currentY;
+            
+            updateTransform();
+        }
+
+        function endDrag() {
+            isDragging = false;
+        }
+
+        function updateTransform() {
+            img.style.transform = `scale(${scale}) translate(${pointX / scale}px, ${pointY / scale}px)`;
+        }
+
+        // --- Other Logic ---
         const tabs = document.querySelectorAll('.nav-item');
         const contents = document.querySelectorAll('.tab-content');
+        let isTabSwitching = false; // Flag to prevent observer triggers during tab switch
 
         function switchTab(tabId) {
             contents.forEach(content => content.classList.add('hidden'));
             const activeContent = document.getElementById(tabId);
             if (activeContent) {
                 activeContent.classList.remove('hidden');
-                // Only scroll to top if we are NOT loading from a hash
-                if (!window.location.hash) {
-                    window.scrollTo(0, 0); 
-                }
             }
 
             tabs.forEach(tab => {
@@ -1225,21 +1315,28 @@
         }
 
         tabs.forEach(tab => tab.addEventListener('click', () => {
-             // Clear hash when manually switching tabs to avoid confusion
+             isTabSwitching = true; // Lock observer
+             document.documentElement.style.scrollSnapType = 'none'; // Disable snap
              history.pushState(null, null, ' ');
+             
+             // Remove active highlights
+             document.querySelectorAll('.active-highlight').forEach(el => el.classList.remove('active-highlight'));
+
              switchTab(tab.dataset.tab);
-             window.scrollTo(0, 0);
+             window.scrollTo({ top: 0, behavior: 'smooth' });
+             
+             // Unlock observer after animation
+             setTimeout(() => {
+                isTabSwitching = false;
+                document.documentElement.style.scrollSnapType = 'y proximity'; // Re-enable
+             }, 800);
         }));
 
-        // --- Deep Linking & Anchor Logic ---
         function setAnchor(id) {
-            // 1. Update Hash
+            // Update Hash silently
             history.pushState(null, null, '#' + id);
             
-            // 2. Highlight UI
             highlightCard(id);
-
-            // 3. Copy to Clipboard
             const url = window.location.href;
             navigator.clipboard.writeText(url).then(() => {
                 showToast();
@@ -1247,15 +1344,11 @@
         }
 
         function highlightCard(id) {
-            // Remove previous highlights
             document.querySelectorAll('.active-highlight').forEach(el => el.classList.remove('active-highlight'));
-            
             const target = document.getElementById(id);
             if (target) {
                 target.classList.add('active-highlight');
-                // Scroll to element with offset for header
-                // Increased offset to 160px to ensure the badge is visible
-                // 150px matches the CSS scroll-margin-top
+                // Sync with CSS scroll-margin-top
                 const headerOffset = 150; 
                 const elementPosition = target.getBoundingClientRect().top;
                 const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
@@ -1273,37 +1366,30 @@
             setTimeout(() => { toast.style.display = 'none'; }, 2000);
         }
 
-        // --- Scroll Spy Logic (Center Based) ---
         const observerOptions = {
             root: null,
-            // Adjust detection area to be a narrow strip in the middle of the screen
             rootMargin: '-45% 0px -45% 0px', 
             threshold: 0
         };
 
         const scrollObserver = new IntersectionObserver((entries) => {
+            if (isTabSwitching) return; // Skip if tab switching
+
             entries.forEach(entry => {
                 if (entry.isIntersecting) {
                     const id = entry.target.id;
-                    // Update URL silently
                     history.replaceState(null, null, '#' + id);
-                    
-                    // Update Visual Highlight Immediately
                     document.querySelectorAll('.active-highlight').forEach(el => el.classList.remove('active-highlight'));
                     entry.target.classList.add('active-highlight');
                 }
             });
         }, observerOptions);
 
-
-        // --- Modal Logic ---
         function openRouteModal(contentId) {
             const content = document.getElementById(contentId).innerHTML;
             const modalBody = document.getElementById('modalBody');
             modalBody.innerHTML = content;
             document.getElementById('infoModal').style.display = 'flex';
-            
-            // Re-attach lightbox listeners to new images in modal
             attachLightboxListeners(); 
         }
 
@@ -1313,14 +1399,17 @@
             }
         }
 
-        // --- Lightbox Logic ---
         function attachLightboxListeners() {
             const images = document.querySelectorAll('img');
-            images.forEach(img => {
-                img.onclick = function() {
-                    // Ignore small icons
+            images.forEach(image => {
+                if (image.id === 'lightboxImg') return; // Skip lightbox itself
+                image.onclick = function() {
                     if(this.width < 50) return; 
-                    document.getElementById('lightboxImg').src = this.src;
+                    const lightboxImg = document.getElementById('lightboxImg');
+                    lightboxImg.src = this.src;
+                    // Reset zoom state
+                    scale = 1; pointX = 0; pointY = 0;
+                    updateTransform();
                     document.getElementById('lightbox').style.display = 'flex';
                 }
             });
@@ -1330,7 +1419,6 @@
             document.getElementById('lightbox').style.display = 'none';
         }
 
-        // --- Checkbox Persistence ---
         function initCheckboxes() {
             const checkboxes = document.querySelectorAll('input[type="checkbox"]');
             checkboxes.forEach((cb, index) => {
@@ -1363,30 +1451,28 @@
             }
         }
 
-        // --- Init ---
         document.addEventListener('DOMContentLoaded', () => {
             initCheckboxes();
             attachLightboxListeners();
 
-            // Observe all timeline cards for scroll spy
             document.querySelectorAll('div[id^="t-"]').forEach(section => {
                 scrollObserver.observe(section);
             });
 
-            // Check URL Hash for deep linking
-            const hash = window.location.hash.substring(1); // remove #
+            // Observe the snap-point header cards specifically to update URL if needed
+            // (Optional enhancement, currently focusing on timeline items)
+
+            const hash = window.location.hash.substring(1); 
             if (hash) {
-                // Find which tab this ID belongs to
                 const targetEl = document.getElementById(hash);
                 if (targetEl) {
                     const tabSection = targetEl.closest('.tab-content');
                     if (tabSection) {
                         switchTab(tabSection.id);
-                        setTimeout(() => highlightCard(hash), 300); // delay for rendering
+                        setTimeout(() => highlightCard(hash), 300); 
                     }
                 }
             } else {
-                // Default Tab
                 const savedTab = localStorage.getItem('japanTripActiveTab');
                 switchTab(savedTab && document.getElementById(savedTab) ? savedTab : 'prep');
             }
