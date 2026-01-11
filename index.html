@@ -15,16 +15,22 @@
             color: #374151; /* Gray 700 */
             -webkit-tap-highlight-color: transparent;
             padding-bottom: 120px;
-            /* 保持原生滾動慣性，這對手機滑動手感至關重要 */
             line-height: 1.8;
-            overscroll-behavior-y: none;
+            
+            /* 修正 1：啟用 iOS 原生慣性滾動 */
+            -webkit-overflow-scrolling: touch;
+            
+            /* 修正 2：移除 overscroll-behavior-y: none，恢復 iOS 觸底回彈體驗 */
+            /* overscroll-behavior-y: none; <--- REMOVED */
         }
 
         html {
-            /* 磁吸：proximity 表示只有「接近」對齊點時才吸附 */
-            /* 這允許使用者用力滑動時可以「飛」過多個卡片，不會感到卡頓 */
+            /* 磁吸設定：proximity (接近才吸) */
             scroll-snap-type: y proximity; 
             scroll-padding-top: 160px;
+            
+            /* 讓滾動行為由瀏覽器原生接管，不要強制 smooth，避免干擾手指操作 */
+            scroll-behavior: auto;
         }
 
         .no-scrollbar::-webkit-scrollbar { display: none; }
@@ -37,7 +43,7 @@
             box-shadow: 0 4px 10px -2px rgba(0, 0, 0, 0.05);
         }
 
-        /* 卡片設計 - 終極流暢版 */
+        /* 卡片設計 */
         .card {
             background: #ffffff;
             border-radius: 18px;
@@ -50,23 +56,17 @@
             transform: scale(1);
             opacity: 0.95;
             
-            /* 修正：移除 content-visibility */
-            /* 這解決了兩件事：
-               1. 滑動時不會因為高度計算延遲而感到「卡頓/阻力」
-               2. 快速滑動時不會出現「白畫面/內容未載入」的情況 */
+            /* 顯示優化 */
             overflow: visible; 
-            
-            /* 保留 GPU 加速以維持 60fps 動畫 */
-            transform: translateZ(0);
+            transform: translateZ(0); /* GPU 加速 */
             will-change: transform; 
 
             /* 磁吸設定 */
             scroll-snap-align: start; 
             scroll-margin-top: 150px; 
-            scroll-snap-stop: normal;
+            scroll-snap-stop: normal; /* 允許甩動時飛過，不強制停下 */
         }
 
-        /* 2/2 標題專用磁吸點 */
         .snap-point {
             scroll-snap-align: start; 
             scroll-margin-top: 150px; 
@@ -1301,7 +1301,7 @@
         // --- Other Logic ---
         const tabs = document.querySelectorAll('.nav-item');
         const contents = document.querySelectorAll('.tab-content');
-        let isTabSwitching = false; // Flag to prevent observer triggers during tab switch
+        let isTabSwitching = false; 
 
         function switchTab(tabId) {
             contents.forEach(content => content.classList.add('hidden'));
@@ -1322,27 +1322,23 @@
         }
 
         tabs.forEach(tab => tab.addEventListener('click', () => {
-             isTabSwitching = true; // Lock observer
-             document.documentElement.style.scrollSnapType = 'none'; // Disable snap
+             isTabSwitching = true; 
+             document.documentElement.style.scrollSnapType = 'none'; 
              history.pushState(null, null, ' ');
              
-             // Remove active highlights
              document.querySelectorAll('.active-highlight').forEach(el => el.classList.remove('active-highlight'));
 
              switchTab(tab.dataset.tab);
              window.scrollTo({ top: 0, behavior: 'smooth' });
              
-             // Unlock observer after animation
              setTimeout(() => {
                 isTabSwitching = false;
-                document.documentElement.style.scrollSnapType = 'y proximity'; // Re-enable
+                document.documentElement.style.scrollSnapType = 'y proximity'; 
              }, 800);
         }));
 
         function setAnchor(id) {
-            // Update Hash silently
             history.pushState(null, null, '#' + id);
-            
             highlightCard(id);
             const url = window.location.href;
             navigator.clipboard.writeText(url).then(() => {
@@ -1355,7 +1351,6 @@
             const target = document.getElementById(id);
             if (target) {
                 target.classList.add('active-highlight');
-                // Sync with CSS scroll-margin-top
                 const headerOffset = 150; 
                 const elementPosition = target.getBoundingClientRect().top;
                 const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
@@ -1379,15 +1374,24 @@
             threshold: 0
         };
 
+        // JS 滾動優化：加入防抖 (Debounce)
+        let scrollTimeout;
         const scrollObserver = new IntersectionObserver((entries) => {
-            if (isTabSwitching) return; // Skip if tab switching
+            if (isTabSwitching) return; 
 
             entries.forEach(entry => {
                 if (entry.isIntersecting) {
                     const id = entry.target.id;
-                    history.replaceState(null, null, '#' + id);
+                    
+                    // 1. 立即更新視覺效果 (無延遲)
                     document.querySelectorAll('.active-highlight').forEach(el => el.classList.remove('active-highlight'));
                     entry.target.classList.add('active-highlight');
+
+                    // 2. 延遲更新網址 (Debounce)，避免快速滑動時卡頓
+                    clearTimeout(scrollTimeout);
+                    scrollTimeout = setTimeout(() => {
+                         history.replaceState(null, null, '#' + id);
+                    }, 500); // 停止滑動 0.5 秒後才更新網址
                 }
             });
         }, observerOptions);
@@ -1409,12 +1413,11 @@
         function attachLightboxListeners() {
             const images = document.querySelectorAll('img');
             images.forEach(image => {
-                if (image.id === 'lightboxImg') return; // Skip lightbox itself
+                if (image.id === 'lightboxImg') return; 
                 image.onclick = function() {
                     if(this.width < 50) return; 
                     const lightboxImg = document.getElementById('lightboxImg');
                     lightboxImg.src = this.src;
-                    // Reset zoom state
                     scale = 1; pointX = 0; pointY = 0;
                     updateTransform();
                     document.getElementById('lightbox').style.display = 'flex';
@@ -1462,9 +1465,12 @@
             initCheckboxes();
             attachLightboxListeners();
 
-            // Observe snap-points (headers) as well to fix highlight logic if needed,
-            // but primarily observing cards
-            document.querySelectorAll('.card').forEach(section => {
+            document.querySelectorAll('div[id^="t-"]').forEach(section => {
+                scrollObserver.observe(section);
+            });
+            
+            // Also observe the header snap-point for consistent highlighting
+             document.querySelectorAll('.snap-point').forEach(section => {
                 scrollObserver.observe(section);
             });
 
