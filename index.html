@@ -15,8 +15,15 @@
             color: #374151; /* Gray 700 */
             -webkit-tap-highlight-color: transparent;
             padding-bottom: 120px;
-            scroll-behavior: smooth;
-            line-height: 1.8; /* 增加全域行高 */
+            /* 關鍵：移除全域 smooth 行為，讓 JS 控制點擊時的平滑，手指滑動則依賴原生慣性 */
+            line-height: 1.8;
+        }
+
+        html {
+            /* 關鍵優化： */
+            /* 1. proximity: 只有接近時才吸附 (用力滑動時觸發)，解決黏滯感 */
+            /* 2. y: 僅垂直方向 */
+            scroll-snap-type: y proximity; 
         }
 
         /* 隱藏捲軸但保留功能 */
@@ -35,20 +42,31 @@
         .card {
             background: #ffffff;
             border-radius: 18px;
-            padding: 18px 16px; /* 減少左右 padding */
-            margin-bottom: 60px; /* 增加垂直間距 */
+            padding: 18px 16px;
+            margin-bottom: 40px; 
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
             border: 1px solid #e5e7eb;
-            transition: all 0.3s ease;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); 
             position: relative;
+            transform: scale(1);
+            opacity: 0.95;
+            
+            /* 關鍵優化：解決衝突 */
+            /* 1. start: 對齊視窗頂部 (跟 JS 錨點位置一致) */
+            scroll-snap-align: start; 
+            /* 2. margin-top: 150px (預留 Header 高度 + 緩衝，與 JS 變數完全一致) */
+            scroll-margin-top: 150px; 
+            
+            scroll-snap-stop: normal;
         }
 
         /* 當前進度高亮樣式 */
         .card.active-highlight {
             border: 2px solid #3b82f6;
-            box-shadow: 0 0 25px rgba(59, 130, 246, 0.25);
-            transform: scale(1.01);
+            box-shadow: 0 10px 30px rgba(59, 130, 246, 0.15);
+            transform: scale(1.02); 
             z-index: 10;
+            opacity: 1;
         }
         
         .current-badge {
@@ -67,27 +85,27 @@
         }
         .card.active-highlight .current-badge { display: block; }
 
-        /* 時間軸樣式 (縮小尺寸) */
+        /* 時間軸樣式 */
         .timeline-container {
             position: relative;
-            padding-left: 20px; /* 縮小左側間距 */
+            padding-left: 20px;
             border-left: 2px solid #e5e7eb;
             margin-left: 6px;
         }
         .timeline-item { position: relative; }
         .timeline-dot {
             position: absolute;
-            left: -27px; /* 調整圓點位置 */
+            left: -27px;
             top: 8px;
-            width: 12px; /* 縮小圓點 */
+            width: 12px;
             height: 12px;
             border-radius: 50%;
             background: #fff;
-            border: 3px solid #3b82f6; /* Blue 500 */
+            border: 3px solid #3b82f6;
             z-index: 10;
         }
 
-        /* 時間標籤 (藍底小字) */
+        /* 時間標籤 */
         .time-badge {
             display: inline-block;
             background-color: #dbeafe; /* Blue 100 */
@@ -123,8 +141,8 @@
             align-items: center;
             justify-content: center;
             gap: 6px;
-            background-color: #f0fdf4; /* Green 50 */
-            color: #15803d; /* Green 700 */
+            background-color: #f0fdf4;
+            color: #15803d;
             padding: 10px;
             border-radius: 10px;
             font-weight: 600;
@@ -141,8 +159,8 @@
             align-items: center;
             justify-content: center;
             gap: 8px;
-            background-color: #eff6ff; /* Blue 50 */
-            color: #1d4ed8; /* Blue 700 */
+            background-color: #eff6ff;
+            color: #1d4ed8;
             padding: 12px;
             border-radius: 12px;
             font-weight: 600;
@@ -155,7 +173,6 @@
         }
         .route-btn:active { transform: scale(0.98); background-color: #dbeafe; }
         
-        /* Smaller route btn for inline use */
         .route-btn-sm {
             padding: 8px 12px;
             margin-top: 8px;
@@ -279,10 +296,7 @@
             color: #312e81;
         }
 
-        /* List Styling in Content */
-        .content-list li {
-            margin-bottom: 8px;
-        }
+        .content-list li { margin-bottom: 8px; }
 
         @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
         @keyframes zoomIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
@@ -363,7 +377,7 @@
                 <div class="current-badge">📍 目前進度</div>
                 <div class="flex flex-col items-center py-6">
                     <div class="time-pill-header" onclick="setAnchor('t-0201-2130')">2/1(日) 21:30</div>
-                    <h2 class="text-2xl font-bold mt-4">桃園機場 第一航廈 (T1) 集合</h2>
+                    <h2 class="text-2xl font-bold mt-4 text-center">桃園機場 第一航廈 (T1) 集合</h2>
                     <p class="text-gray-500 mt-2">請各位自行安排前往</p>
                     <div class="mt-8 bg-blue-50 text-blue-800 px-6 py-4 rounded-xl text-center shadow-sm">
                         <i class="fa-solid fa-passport text-2xl mb-2"></i><br>
@@ -404,8 +418,8 @@
                     <div class="timeline-dot"></div>
                     <div class="card" id="t-0202-0400">
                         <div class="current-badge">📍 目前進度</div>
-                        <div class="time-pill-header" onclick="setAnchor('t-0202-0400')">04:00 - 05:00</div>
-                        <h3 class="text-xl font-bold mt-2 mb-4">機場通關與補給 (分秒必爭)</h3>
+                        <div class="time-pill-header" onclick="setAnchor('t-0202-0400')">04:00 - 04:30</div>
+                        <h3 class="text-xl font-bold mt-2 mb-4">機場通關：入境審查與行李</h3>
                         
                         <ul class="list-disc pl-5 mt-2 text-gray-700 content-list">
                             <li><span class="time-badge">04:00 - 04:20</span> 入境審查</li>
@@ -424,40 +438,45 @@
                                 <a href="https://maps.app.goo.gl/diAxNd1oA83QAMbr7" target="_blank" class="map-btn bg-white border-red-200 text-red-700 hover:bg-red-50"><i class="fa-solid fa-location-dot"></i> 集合點地圖</a>
                             </div>
                         </div>
+                    </div>
+                </div>
 
-                        <div class="mt-8 border-t border-gray-100 pt-6">
-                            <h4 class="font-bold flex items-center gap-2 mb-2 text-lg">
-                                <i class="fa-solid fa-store text-blue-600"></i>
-                                <span class="time-badge text-base">04:35 - 04:55</span> Lawson 採購
-                            </h4>
-                            <p class="text-gray-600 mb-3"><strong>停留 20 分鐘</strong>。目標：早餐 + 未來幾日在雪國的戰備糧食。</p>
-                            <div class="bg-gray-50 p-4 rounded-lg text-sm mb-4 border border-gray-100">
-                                <p class="mb-2"><strong>📍 地點：</strong> ローソン 羽田空港第３ターミナル店 1F</p>
-                                <p class="mb-2"><strong>動線 1 (入境後)：</strong> 走進入境大廳即刻「右轉」搭電梯下樓。</p>
-                                <p><strong>動線 2 (從集合點)：</strong> 觀光資訊中心「正後方」電梯下樓。</p>
-                            </div>
-                            <div class="flex flex-col sm:flex-row gap-3">
-                                <a href="https://maps.app.goo.gl/yjEx2yYdytEBU6o17" target="_blank" class="map-btn flex-1"><i class="fa-solid fa-map-pin"></i> Google Maps</a>
-                                <a href="https://platinumaps.jp/d/haneda?culture=zh-tw&c=all&gm=121&floor=2F&area=9&list=1&dir=1&src=spot-367393&dst=spot-352989" target="_blank" class="map-btn flex-1 bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100"><i class="fa-solid fa-location-arrow"></i> 線上路線導航 (3F -> 1F)</a>
-                            </div>
+                <div class="timeline-item">
+                    <div class="timeline-dot"></div>
+                    <div class="card" id="t-0202-0435">
+                        <div class="current-badge">📍 目前進度</div>
+                        <div class="time-pill-header" onclick="setAnchor('t-0202-0435')">04:35 - 04:55</div>
+                        <h3 class="text-xl font-bold mt-2 mb-4"><i class="fa-solid fa-store text-blue-600 mr-2"></i>Lawson 採購戰備糧食</h3>
+                        
+                        <p class="text-gray-600 mb-3 text-lg"><strong>停留 20 分鐘</strong>。目標：早餐 + 未來幾日在雪國的戰備糧食。</p>
+                        <div class="bg-gray-50 p-4 rounded-lg text-sm mb-4 border border-gray-100">
+                            <p class="mb-2"><strong>📍 地點：</strong> ローソン 羽田空港第３ターミナル店 1F</p>
+                            <p class="mb-2"><strong>動線 1 (入境後)：</strong> 走進入境大廳即刻「右轉」搭電梯下樓。</p>
+                            <p><strong>動線 2 (從集合點)：</strong> 觀光資訊中心「正後方」電梯下樓。</p>
                         </div>
+                        <div class="flex flex-col sm:flex-row gap-3">
+                            <a href="https://maps.app.goo.gl/yjEx2yYdytEBU6o17" target="_blank" class="map-btn flex-1"><i class="fa-solid fa-map-pin"></i> Google Maps</a>
+                            <a href="https://platinumaps.jp/d/haneda?culture=zh-tw&c=all&gm=121&floor=2F&area=9&list=1&dir=1&src=spot-367393&dst=spot-352989" target="_blank" class="map-btn flex-1 bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100"><i class="fa-solid fa-location-arrow"></i> 線上路線導航 (3F -> 1F)</a>
+                        </div>
+                    </div>
+                </div>
 
-                        <div class="mt-8 border-t border-gray-100 pt-6">
-                             <h4 class="font-bold flex items-center gap-2 mb-2 text-red-600 text-lg">
-                                <i class="fa-solid fa-flag-checkered"></i>
-                                <span class="time-badge bg-red-100 text-red-700 text-base">04:55 - 05:00</span> 集合準備前往月台
-                            </h4>
-                            <p class="text-gray-700 text-lg mb-3">全員到齊後，前往 <strong>3F「2號月台」</strong> 候車。</p>
+                <div class="timeline-item">
+                    <div class="timeline-dot"></div>
+                    <div class="card" id="t-0202-0455">
+                        <div class="current-badge">📍 目前進度</div>
+                        <div class="time-pill-header" onclick="setAnchor('t-0202-0455')">04:55 - 05:00</div>
+                        <h3 class="text-xl font-bold mt-2 mb-4 text-red-600"><i class="fa-solid fa-flag-checkered mr-2"></i>集合準備前往月台</h3>
+                        <p class="text-gray-700 text-lg mb-3">全員到齊後，前往 <strong>3F「2號月台」</strong> 候車。</p>
 
-                            <button class="route-btn route-btn-sm" onclick="openRouteModal('modal-monorail-seat')">
-                                <i class="fa-solid fa-train"></i> 📖 查看單軌電車「車廂攻略」
-                            </button>
+                        <button class="route-btn route-btn-sm" onclick="openRouteModal('modal-monorail-seat')">
+                            <i class="fa-solid fa-train"></i> 📖 查看單軌電車「車廂攻略」
+                        </button>
 
-                             <div id="modal-monorail-seat" class="hidden">
-                                <h3 class="text-2xl font-bold mb-4">單軌電車車廂策略</h3>
-                                <p class="text-lg text-gray-700 mb-4">坐「中間偏北」的車廂位置，靠近濱松町站的出口，方便轉乘。</p>
-                                <img src="https://hackmd.io/_uploads/ByPI29JSbx.png" class="content-img" alt="車廂位置建議">
-                            </div>
+                         <div id="modal-monorail-seat" class="hidden">
+                            <h3 class="text-2xl font-bold mb-4">單軌電車車廂策略</h3>
+                            <p class="text-lg text-gray-700 mb-4">坐「中間偏北」的車廂位置，靠近濱松町站的出口，方便轉乘。</p>
+                            <img src="https://hackmd.io/_uploads/ByPI29JSbx.png" class="content-img" alt="車廂位置建議">
                         </div>
                     </div>
                 </div>
@@ -466,66 +485,76 @@
                     <div class="timeline-dot"></div>
                     <div class="card" id="t-0202-0509">
                         <div class="current-badge">📍 目前進度</div>
-                        <div class="time-pill-header" onclick="setAnchor('t-0202-0509')">05:09 - 06:08</div>
-                        <h3 class="text-xl font-bold mt-2 mb-4">單軌電車 ➔ JR轉乘 (關鍵路徑)</h3>
+                        <div class="time-pill-header" onclick="setAnchor('t-0202-0509')">05:09 - 05:25</div>
+                        <h3 class="text-xl font-bold mt-2 mb-4">搭乘 東京單軌電車</h3>
+                        <div class="text-lg text-gray-700 mb-2">往 <strong>濱松町 (Hamamatsucho)</strong></div>
+                        <div class="text-sm text-gray-600 mt-2 bg-green-50 inline-block px-3 py-1 rounded border border-green-100">
+                            抵達後從 5F 前往 <strong>3F 中央口</strong> 轉車
+                        </div>
+
+                        <button class="route-btn route-btn-sm" onclick="openRouteModal('modal-hamamatsucho')">
+                            <i class="fa-solid fa-person-walking-arrow-right"></i> 📖 查看「濱松町」轉乘指引
+                        </button>
                         
-                        <div class="space-y-8 mt-4">
-                            <div class="border-l-4 border-green-500 pl-4 py-1">
-                                <div class="font-bold text-lg mb-1"><span class="time-badge text-base">05:09 - 05:25</span> 搭乘 東京單軌電車</div>
-                                <div class="text-gray-600">往 濱松町 (Hamamatsucho)</div>
-                                <div class="text-sm text-gray-500 mt-1 bg-green-50 inline-block px-2 py-0.5 rounded">抵達後從 5F 前往 3F 中央口 轉車</div>
+                        <div id="modal-hamamatsucho" class="hidden">
+                            <h3 class="text-2xl font-bold mb-4">濱松町轉乘指引</h3>
+                            <p class="mb-4 text-gray-700">抵達後從 5F 前往 <strong>3F 中央口</strong> 轉車。</p>
+                            <img src="https://hackmd.io/_uploads/r1LvNqJHZe.png" class="content-img" alt="轉乘指引1">
+                            <img src="https://hackmd.io/_uploads/HyC1bc1SWe.png" class="content-img" alt="轉乘指引2">
+                        </div>
+                    </div>
+                </div>
 
-                                 <button class="route-btn route-btn-sm" onclick="openRouteModal('modal-hamamatsucho')">
-                                    <i class="fa-solid fa-person-walking-arrow-right"></i> 📖 查看「濱松町」轉乘指引
-                                </button>
-                                
-                                <div id="modal-hamamatsucho" class="hidden">
-                                    <h3 class="text-2xl font-bold mb-4">濱松町轉乘指引</h3>
-                                    <p class="mb-4 text-gray-700">抵達後從 5F 前往 <strong>3F 中央口</strong> 轉車。</p>
-                                    <img src="https://hackmd.io/_uploads/r1LvNqJHZe.png" class="content-img" alt="轉乘指引1">
-                                    <img src="https://hackmd.io/_uploads/HyC1bc1SWe.png" class="content-img" alt="轉乘指引2">
-                                </div>
-                            </div>
+                <div class="timeline-item">
+                    <div class="timeline-dot"></div>
+                    <div class="card" id="t-0202-0533">
+                        <div class="current-badge">📍 目前進度</div>
+                        <div class="time-pill-header" onclick="setAnchor('t-0202-0533')">05:33 - 05:40</div>
+                        <h3 class="text-xl font-bold mt-2 mb-4">轉乘 JR 京濱東北線</h3>
+                        <div class="text-lg text-gray-700">濱松町 ➔ <strong>東京車站</strong> (約7分)</div>
+                        <div class="text-sm text-gray-500 mt-2">方向：上野、大宮方向</div>
+                    </div>
+                </div>
 
-                            <div class="border-l-4 border-green-500 pl-4 py-1">
-                                <div class="font-bold text-lg mb-1"><span class="time-badge text-base">05:33 - 05:40</span> 轉乘 JR 京濱東北線</div>
-                                <div class="text-gray-600">濱松町 ➔ 東京車站 (約7分)</div>
-                                <div class="text-sm text-gray-500 mt-1">方向：上野、大宮方向</div>
-                            </div>
-
-                            <div class="border-l-4 border-yellow-400 pl-4 py-1">
-                                 <div class="font-bold text-lg mb-1 text-yellow-700"><span class="time-badge bg-yellow-100 text-yellow-800 text-base">補給</span> 先去 NewDays (站內)</div>
-                                 <p class="text-sm text-gray-600">利用轉乘空檔，先去站內 NewDays 補齊 Lawson 沒買到的東西。</p>
-                                 <button class="route-btn route-btn-sm bg-white border-yellow-300 text-yellow-700 mt-2" onclick="openRouteModal('modal-newdays')">
+                <div class="timeline-item">
+                    <div class="timeline-dot"></div>
+                    <div class="card" id="t-0202-0540">
+                        <div class="current-badge">📍 目前進度</div>
+                        <div class="time-pill-header" onclick="setAnchor('t-0202-0540')">05:40 - 06:08</div>
+                        <h3 class="text-xl font-bold mt-2 mb-4 text-red-700">東京車站大移動 & 補給</h3>
+                        
+                        <div class="space-y-6">
+                            <div class="bg-yellow-50 p-4 rounded-lg border-l-4 border-yellow-400">
+                                <h4 class="font-bold text-yellow-800 text-lg mb-2">🟡 補給：先去 NewDays (站內)</h4>
+                                <p class="text-gray-700 mb-2">利用轉乘空檔，先去站內 NewDays 補齊 Lawson 沒買到的東西。</p>
+                                <button class="route-btn route-btn-sm bg-white border-yellow-300 text-yellow-700 mt-1" onclick="openRouteModal('modal-newdays')">
                                     <i class="fa-solid fa-basket-shopping"></i> 📖 查看 NewDays 位置
                                 </button>
-
-                                <div id="modal-newdays" class="hidden">
-                                     <h3 class="text-2xl font-bold mb-4">站內補給 NewDays</h3>
-                                    <p class="text-gray-700 mb-4">轉乘時間還算充裕，可去站內的 NewDays 補齊 Lawson 沒買到的東西。</p>
-                                    <a href="https://maps.app.goo.gl/HbEaUckHc3HYLoZm8" target="_blank" class="map-btn w-auto inline-flex mb-2">Google Maps</a>
-                                    <img src="https://hackmd.io/_uploads/HkdeucJH-g.jpg" class="content-img" alt="NewDays">
-                                </div>
                             </div>
 
-                            <div class="border-l-4 border-red-500 pl-4 py-1 bg-red-50 rounded-r-lg">
-                                <div class="font-bold text-lg text-red-700 mb-1"><span class="time-badge bg-red-100 text-red-800 text-base">05:40 - 06:08</span> 東京車站大移動</div>
-                                <div class="text-gray-800 font-medium">JR 在來線 ➔ 新幹線</div>
-                                <div class="text-sm text-gray-600 mt-2">從「3號月台」移動到新幹線月台「20-23月台」</div>
-
-                                <button class="route-btn route-btn-sm bg-white" onclick="openRouteModal('modal-tokyo-map')">
+                            <div class="bg-red-50 p-4 rounded-lg border-l-4 border-red-500">
+                                <h4 class="font-bold text-red-800 text-lg mb-2">🔴 移動：JR 在來線 ➔ 新幹線</h4>
+                                <p class="text-gray-700 mb-2">從「3號月台」移動到新幹線月台「20-23月台」。</p>
+                                <button class="route-btn route-btn-sm bg-white border-red-200 text-red-700 mt-1" onclick="openRouteModal('modal-tokyo-map')">
                                     <i class="fa-solid fa-map"></i> 📖 查看「東京車站」平面路線圖
                                 </button>
-
-                                <div id="modal-tokyo-map" class="hidden">
-                                    <h3 class="text-2xl font-bold mb-4">東京車站平面路線圖</h3>
-                                    <p class="mb-4 text-red-500 font-bold bg-red-50 p-2 rounded">請按圖上路線移動：</p>
-                                    <img src="https://hackmd.io/_uploads/BkoovYkBWx.jpg" class="content-img" alt="路線圖1">
-                                    <img src="https://hackmd.io/_uploads/B1jjvtkHWx.jpg" class="content-img" alt="路線圖2">
-                                    <img src="https://hackmd.io/_uploads/HksoPY1HWl.jpg" class="content-img" alt="路線圖3">
-                                    <img src="https://hackmd.io/_uploads/rJioDF1SZx.jpg" class="content-img" alt="路線圖4">
-                                </div>
                             </div>
+                        </div>
+
+                        <div id="modal-newdays" class="hidden">
+                             <h3 class="text-2xl font-bold mb-4">站內補給 NewDays</h3>
+                            <p class="text-gray-700 mb-4">轉乘時間還算充裕，可去站內的 NewDays 補齊 Lawson 沒買到的東西。</p>
+                            <a href="https://maps.app.goo.gl/HbEaUckHc3HYLoZm8" target="_blank" class="map-btn w-auto inline-flex mb-2">Google Maps</a>
+                            <img src="https://hackmd.io/_uploads/HkdeucJH-g.jpg" class="content-img" alt="NewDays">
+                        </div>
+
+                        <div id="modal-tokyo-map" class="hidden">
+                            <h3 class="text-2xl font-bold mb-4">東京車站平面路線圖</h3>
+                            <p class="mb-4 text-red-500 font-bold bg-red-50 p-2 rounded">請按圖上路線移動：</p>
+                            <img src="https://hackmd.io/_uploads/BkoovYkBWx.jpg" class="content-img" alt="路線圖1">
+                            <img src="https://hackmd.io/_uploads/B1jjvtkHWx.jpg" class="content-img" alt="路線圖2">
+                            <img src="https://hackmd.io/_uploads/HksoPY1HWl.jpg" class="content-img" alt="路線圖3">
+                            <img src="https://hackmd.io/_uploads/rJioDF1SZx.jpg" class="content-img" alt="路線圖4">
                         </div>
                     </div>
                 </div>
@@ -552,10 +581,23 @@
                             </li>
                             <li class="pl-4 border-l-4 border-gray-200">
                                 <strong class="text-lg block mb-1"><span class="time-badge">09:00 - 09:15</span> 移動至飯店</strong>
-                                <p class="mb-1">搭乘青達專車送回飯店 (Chenda International Hotel 石打BASE) 放行李。</p>
-                                <p class="text-red-600 font-bold bg-red-50 p-2 rounded text-sm"><i class="fa-solid fa-box"></i> ⚠️ 收納提醒：每個人要準備袋子收納自己的鞋子，並放到行李箱中。</p>
+                                <p class="mb-1">搭乘青達專車送回飯店 (Chenda International Hotel 石打BASE)。</p>
                             </li>
                         </ul>
+                    </div>
+                </div>
+
+                <div class="timeline-item">
+                    <div class="timeline-dot"></div>
+                    <div class="card" id="t-0202-0915">
+                        <div class="current-badge">📍 目前進度</div>
+                        <div class="time-pill-header" onclick="setAnchor('t-0202-0915')">09:15 - 09:30</div>
+                        <h3 class="text-xl font-bold mt-2 mb-4">寄放行李 & 等待接駁</h3>
+                        <div class="space-y-3 text-gray-700 text-lg">
+                            <p><strong>動作：</strong> 寄放行李，準備輕裝去滑雪。</p>
+                            <p class="text-red-600 font-bold bg-red-50 p-3 rounded text-base"><i class="fa-solid fa-box mr-2"></i> ⚠️ 收納提醒：每個人要準備袋子收納自己的鞋子，並放到行李箱中。</p>
+                            <p class="text-sm text-gray-500 mt-2">等待 09:30 接駁車前往岩原雪場。</p>
+                        </div>
                     </div>
                 </div>
 
@@ -1213,7 +1255,8 @@
                 target.classList.add('active-highlight');
                 // Scroll to element with offset for header
                 // Increased offset to 160px to ensure the badge is visible
-                const headerOffset = 160;
+                // 150px matches the CSS scroll-margin-top
+                const headerOffset = 150; 
                 const elementPosition = target.getBoundingClientRect().top;
                 const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
                 
@@ -1242,8 +1285,12 @@
             entries.forEach(entry => {
                 if (entry.isIntersecting) {
                     const id = entry.target.id;
-                    // Only replace state (URL), DO NOT highlight visual (avoids distraction while scrolling)
+                    // Update URL silently
                     history.replaceState(null, null, '#' + id);
+                    
+                    // Update Visual Highlight Immediately
+                    document.querySelectorAll('.active-highlight').forEach(el => el.classList.remove('active-highlight'));
+                    entry.target.classList.add('active-highlight');
                 }
             });
         }, observerOptions);
