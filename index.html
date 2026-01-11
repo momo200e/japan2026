@@ -22,7 +22,6 @@
         }
 
         html {
-            /* 移除 CSS 磁吸，完全依賴 JS 控制 */
             scroll-padding-top: 160px;
             /* 讓滑動更順暢 */
             -webkit-overflow-scrolling: touch;
@@ -47,19 +46,11 @@
             margin-bottom: 40px; 
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
             border: 1px solid #e5e7eb;
-            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); 
+            /* 移除 transition 避免影響原生滾動效能 */
             position: relative;
-            transform: scale(1);
-            opacity: 0.95;
             
             overflow: visible; 
             transform: translateZ(0);
-            will-change: transform; 
-        }
-
-        /* 2/2 標題專用標記 (JS 用) */
-        .snap-point {
-             /* 僅作標記用，無 CSS 效果 */
         }
 
         .card.active-highlight {
@@ -68,6 +59,8 @@
             transform: scale(1.02) translateZ(0); 
             z-index: 10;
             opacity: 1;
+            /* 只有高亮時才加 transition */
+            transition: all 0.3s ease;
         }
         
         .current-badge {
@@ -135,6 +128,10 @@
             border-bottom-color: #2563eb;
         }
 
+        .map-btn, .route-btn, .route-btn-sm {
+             touch-action: manipulation;
+        }
+
         .map-btn {
             display: flex;
             align-items: center;
@@ -150,7 +147,6 @@
             border: 1px solid #bbf7d0;
             font-size: 0.9rem;
             transition: background 0.2s;
-            touch-action: manipulation;
         }
         .map-btn:hover { background-color: #dcfce7; }
 
@@ -170,7 +166,6 @@
             width: 100%;
             transition: all 0.2s;
             font-size: 0.95rem;
-            touch-action: manipulation;
         }
         .route-btn:active { transform: scale(0.98); background-color: #dbeafe; }
         
@@ -189,7 +184,6 @@
             margin-top: 8px;
             font-size: 0.85rem;
             width: 100%;
-            touch-action: manipulation;
         }
 
         .time-pill-header {
@@ -331,7 +325,7 @@
 
         .content-list li { margin-bottom: 8px; }
 
-        /* Animation */
+        /* Animation Keyframes - 調整為 0.5s */
         @keyframes slideInRight {
             from { opacity: 0; transform: translateX(30px); }
             to { opacity: 1; transform: translateX(0); }
@@ -343,11 +337,11 @@
         
         /* 增加 will-change 提升 iOS 動畫效能 */
         .anim-right { 
-            animation: slideInRight 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; 
+            animation: slideInRight 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; 
             will-change: transform, opacity;
         }
         .anim-left { 
-            animation: slideInLeft 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; 
+            animation: slideInLeft 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; 
             will-change: transform, opacity;
         }
         
@@ -379,7 +373,6 @@
     <div style="height: 120px;"></div>
 
     <main class="px-2 md:px-4">
-
         <section id="prep" class="tab-content hidden">
             <div class="section-header">
                 <h2 class="text-xl font-bold">📝 行前準備 & 備忘</h2>
@@ -441,7 +434,7 @@
         </section>
 
         <section id="feb2" class="tab-content hidden">
-            <div class="bg-gradient-to-br from-blue-700 to-indigo-800 p-6 rounded-2xl mb-10 shadow-xl text-white relative overflow-hidden snap-point">
+            <div class="bg-gradient-to-br from-blue-700 to-indigo-800 p-6 rounded-2xl mb-10 shadow-xl text-white relative overflow-hidden">
                 <div class="relative z-10">
                     <h2 class="text-2xl font-bold">📅 2/2 (一) 紅眼特攻</h2>
                     <p class="opacity-90 mt-1 text-lg">直衝越後湯澤滑雪去</p>
@@ -1255,7 +1248,6 @@
     <script>
         // --- 核心邏輯區 ---
         
-        // 全域變數宣告
         let scrollTimeout;
         const SNAP_DELAY = 150; // 0.15s
         let isUserInteracting = false;
@@ -1267,35 +1259,26 @@
         const contents = document.querySelectorAll('.tab-content');
         const tabOrder = ['prep', 'feb1-meeting', 'feb2', 'feb3', 'feb4', 'feb5', 'feb6', 'feb7', 'feb8'];
 
-        // --- 1. 觸控干擾偵測 ---
-        window.addEventListener('touchstart', () => {
-            isUserInteracting = true;
-            clearTimeout(scrollTimeout); 
-        }, {passive: true});
+        // --- 1. 觸控干擾偵測 (防止磁吸干擾點擊) ---
+        // 任何互動都先清除磁吸倒數
+        const clearSnap = () => clearTimeout(scrollTimeout);
 
-        window.addEventListener('touchmove', () => {
-            isUserInteracting = true;
-            clearTimeout(scrollTimeout);
-        }, {passive: true});
-
-        window.addEventListener('wheel', () => {
-            isUserInteracting = true;
-            clearTimeout(scrollTimeout);
-            setTimeout(() => { isUserInteracting = false; }, 200);
-        }, {passive: true});
-
-        window.addEventListener('touchend', () => {
-            setTimeout(() => { isUserInteracting = false; }, 50);
-        }, {passive: true});
+        window.addEventListener('touchstart', () => { isUserInteracting = true; clearSnap(); }, {passive: true});
+        window.addEventListener('touchmove', () => { isUserInteracting = true; clearSnap(); }, {passive: true});
+        window.addEventListener('wheel', () => { isUserInteracting = true; clearSnap(); setTimeout(() => isUserInteracting = false, 200); }, {passive: true});
+        window.addEventListener('touchend', () => { setTimeout(() => isUserInteracting = false, 50); }, {passive: true});
 
         // --- 2. 智慧滾動監聽 ---
         window.addEventListener('scroll', () => {
+             // 僅視覺更新，不做位置變動
              if (!isTabSwitching) {
                  updateScrollSpy();
              }
 
+             // 若正在切換頁籤或程式滾動中，不執行磁吸
              if (isUserInteracting || isProgrammaticScroll || isTabSwitching) return;
 
+             // 這裡保留延遲磁吸邏輯，但已移除 CSS snap，所以是純 JS 緩動
              clearTimeout(scrollTimeout);
              scrollTimeout = setTimeout(snapToNearestCard, SNAP_DELAY);
         });
@@ -1321,33 +1304,11 @@
         }
 
         function snapToNearestCard() {
-            const headerOffset = 150; 
-            const cards = document.querySelectorAll('.tab-content:not(.hidden) .card, .tab-content:not(.hidden) .snap-point');
-            
-            let closestCard = null;
-            let minDistance = Infinity;
-
-            cards.forEach(card => {
-                const rect = card.getBoundingClientRect();
-                const distance = Math.abs(rect.top - headerOffset);
-                if (distance < minDistance) {
-                    minDistance = distance;
-                    closestCard = card;
-                }
-            });
-
-            if (closestCard && minDistance < 120) { 
-                const elementPosition = closestCard.getBoundingClientRect().top;
-                const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
-
-                window.scrollTo({
-                    top: offsetPosition,
-                    behavior: 'smooth' 
-                });
-            }
+            // 已停用強制磁吸，僅保留作為未來擴充介面，保持原生滾動體驗
+            // 若要啟用 JS 磁吸可在此實作，但目前保持空白以確保原生體驗
         }
 
-        // --- 3. 頁籤切換 (含左右動畫 & 修復 iOS) ---
+        // --- 3. 頁籤切換 (修復 iOS 動畫閃爍) ---
         function switchTab(tabId) {
             const currentTab = document.querySelector('.nav-item.active');
             let prevIndex = -1;
@@ -1359,23 +1320,26 @@
             contents.forEach(content => {
                 content.classList.add('hidden');
                 content.classList.remove('anim-left', 'anim-right');
+                content.style.opacity = '0'; // 關鍵：先隱藏防止閃爍
             });
 
             const activeContent = document.getElementById(tabId);
             if (activeContent) {
                 activeContent.classList.remove('hidden');
                 
-                // 關鍵修復：強制 Reflow 讓 iOS 播放動畫
-                void activeContent.offsetWidth; 
-
-                // 動畫方向
-                if(prevIndex !== -1 && newIndex > prevIndex) {
-                    activeContent.classList.add('anim-right');
-                } else if (prevIndex !== -1 && newIndex < prevIndex) {
-                    activeContent.classList.add('anim-left');
-                } else {
-                    activeContent.classList.add('anim-right');
-                }
+                // 關鍵 iOS Fix: 確保 DOM 更新後再加動畫 class
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                        activeContent.style.opacity = ''; // 恢復透明度控制權給動畫
+                        if(prevIndex !== -1 && newIndex > prevIndex) {
+                            activeContent.classList.add('anim-right');
+                        } else if (prevIndex !== -1 && newIndex < prevIndex) {
+                            activeContent.classList.add('anim-left');
+                        } else {
+                            activeContent.classList.add('anim-right');
+                        }
+                    });
+                });
             }
 
             tabs.forEach(tab => {
@@ -1390,7 +1354,7 @@
         }
 
         tabs.forEach(tab => tab.addEventListener('click', () => {
-             // 關鍵修復：點擊選單時，立刻殺死磁吸
+             // 1. 殺死所有磁吸任務
              clearTimeout(scrollTimeout);
              
              isTabSwitching = true;
@@ -1402,6 +1366,7 @@
              switchTab(tab.dataset.tab);
              window.scrollTo({ top: 0, behavior: 'smooth' });
              
+             // 延長保護期，確保動畫完成前不會被視為手動滾動
              setTimeout(() => {
                 isTabSwitching = false;
                 isProgrammaticScroll = false;
@@ -1410,7 +1375,7 @@
 
         // --- 4. 錨點跳轉 ---
         function setAnchor(id) {
-            clearTimeout(scrollTimeout); // 防止磁吸干擾跳轉
+            clearTimeout(scrollTimeout);
             isProgrammaticScroll = true;
             history.pushState(null, null, '#' + id);
             
@@ -1565,7 +1530,6 @@
             }
         }
 
-        // --- Init ---
         document.addEventListener('DOMContentLoaded', () => {
             initCheckboxes();
             attachLightboxListeners();
