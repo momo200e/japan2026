@@ -15,13 +15,14 @@
             color: #374151; /* Gray 700 */
             -webkit-tap-highlight-color: transparent;
             padding-bottom: 120px;
-            /* 保持原生滾動慣性 */
+            /* 保持原生滾動慣性，這對手機滑動手感至關重要 */
             line-height: 1.8;
             overscroll-behavior-y: none;
         }
 
         html {
-            /* 磁吸：接近時才吸附 */
+            /* 磁吸：proximity 表示只有「接近」對齊點時才吸附 */
+            /* 這允許使用者用力滑動時可以「飛」過多個卡片，不會感到卡頓 */
             scroll-snap-type: y proximity; 
             scroll-padding-top: 160px;
         }
@@ -36,14 +37,7 @@
             box-shadow: 0 4px 10px -2px rgba(0, 0, 0, 0.05);
         }
 
-        /* 修正 1：定義通用的磁吸對齊樣式，給 2/2 標題使用 */
-        .snap-point {
-            scroll-snap-align: start; 
-            scroll-margin-top: 150px; 
-            scroll-snap-stop: normal;
-        }
-
-        /* 卡片設計 */
+        /* 卡片設計 - 終極流暢版 */
         .card {
             background: #ffffff;
             border-radius: 18px;
@@ -56,11 +50,24 @@
             transform: scale(1);
             opacity: 0.95;
             
+            /* 修正：移除 content-visibility */
+            /* 這解決了兩件事：
+               1. 滑動時不會因為高度計算延遲而感到「卡頓/阻力」
+               2. 快速滑動時不會出現「白畫面/內容未載入」的情況 */
             overflow: visible; 
+            
+            /* 保留 GPU 加速以維持 60fps 動畫 */
             transform: translateZ(0);
             will-change: transform; 
 
-            /* 包含磁吸設定 */
+            /* 磁吸設定 */
+            scroll-snap-align: start; 
+            scroll-margin-top: 150px; 
+            scroll-snap-stop: normal;
+        }
+
+        /* 2/2 標題專用磁吸點 */
+        .snap-point {
             scroll-snap-align: start; 
             scroll-margin-top: 150px; 
             scroll-snap-stop: normal;
@@ -1455,12 +1462,11 @@
             initCheckboxes();
             attachLightboxListeners();
 
-            document.querySelectorAll('div[id^="t-"]').forEach(section => {
+            // Observe snap-points (headers) as well to fix highlight logic if needed,
+            // but primarily observing cards
+            document.querySelectorAll('.card').forEach(section => {
                 scrollObserver.observe(section);
             });
-
-            // Observe the snap-point header cards specifically to update URL if needed
-            // (Optional enhancement, currently focusing on timeline items)
 
             const hash = window.location.hash.substring(1); 
             if (hash) {
