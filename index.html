@@ -16,21 +16,16 @@
             -webkit-tap-highlight-color: transparent;
             padding-bottom: 120px;
             line-height: 1.8;
-            
-            /* 修正 1：啟用 iOS 原生慣性滾動 */
-            -webkit-overflow-scrolling: touch;
-            
-            /* 修正 2：移除 overscroll-behavior-y: none，恢復 iOS 觸底回彈體驗 */
-            /* overscroll-behavior-y: none; <--- REMOVED */
+            /* 恢復 iOS 觸底回彈 (Rubber banding) */
+            overscroll-behavior-y: auto; 
         }
 
+        /* 移除 CSS 磁吸，完全依賴 JS 延遲觸發，還原原生滑動慣性 */
         html {
-            /* 磁吸設定：proximity (接近才吸) */
-            scroll-snap-type: y proximity; 
+            /* scroll-snap-type: y proximity; <--- REMOVED */
             scroll-padding-top: 160px;
-            
-            /* 讓滾動行為由瀏覽器原生接管，不要強制 smooth，避免干擾手指操作 */
-            scroll-behavior: auto;
+            /* 讓滑動更順暢 */
+            -webkit-overflow-scrolling: touch;
         }
 
         .no-scrollbar::-webkit-scrollbar { display: none; }
@@ -41,9 +36,10 @@
             backdrop-filter: blur(10px);
             -webkit-backdrop-filter: blur(10px);
             box-shadow: 0 4px 10px -2px rgba(0, 0, 0, 0.05);
+            /* 確保 Header 不會因為慣性滾動而閃爍 */
+            transform: translateZ(0); 
         }
 
-        /* 卡片設計 */
         .card {
             background: #ffffff;
             border-radius: 18px;
@@ -56,21 +52,17 @@
             transform: scale(1);
             opacity: 0.95;
             
-            /* 顯示優化 */
+            /* 移除 CSS 對齊點，改由 JS 計算 */
+            /* scroll-snap-align: start; <--- REMOVED */
+            
             overflow: visible; 
-            transform: translateZ(0); /* GPU 加速 */
+            transform: translateZ(0);
             will-change: transform; 
-
-            /* 磁吸設定 */
-            scroll-snap-align: start; 
-            scroll-margin-top: 150px; 
-            scroll-snap-stop: normal; /* 允許甩動時飛過，不強制停下 */
         }
 
+        /* 2/2 標題專用標記 (JS 用) */
         .snap-point {
-            scroll-snap-align: start; 
-            scroll-margin-top: 150px; 
-            scroll-snap-stop: normal;
+             /* 僅作標記用，無 CSS 效果 */
         }
 
         .card.active-highlight {
@@ -1301,7 +1293,8 @@
         // --- Other Logic ---
         const tabs = document.querySelectorAll('.nav-item');
         const contents = document.querySelectorAll('.tab-content');
-        let isTabSwitching = false; 
+        let isTabSwitching = false;
+        let isProgrammaticScroll = false; // Flag to detect clicks vs user scroll
 
         function switchTab(tabId) {
             contents.forEach(content => content.classList.add('hidden'));
@@ -1322,10 +1315,9 @@
         }
 
         tabs.forEach(tab => tab.addEventListener('click', () => {
-             isTabSwitching = true; 
-             document.documentElement.style.scrollSnapType = 'none'; 
+             isTabSwitching = true;
+             isProgrammaticScroll = true;
              history.pushState(null, null, ' ');
-             
              document.querySelectorAll('.active-highlight').forEach(el => el.classList.remove('active-highlight'));
 
              switchTab(tab.dataset.tab);
@@ -1333,17 +1325,23 @@
              
              setTimeout(() => {
                 isTabSwitching = false;
-                document.documentElement.style.scrollSnapType = 'y proximity'; 
+                isProgrammaticScroll = false;
              }, 800);
         }));
 
         function setAnchor(id) {
+            isProgrammaticScroll = true; // Lock snap logic
             history.pushState(null, null, '#' + id);
             highlightCard(id);
             const url = window.location.href;
             navigator.clipboard.writeText(url).then(() => {
                 showToast();
             });
+
+            // Unlock after animation approx time
+            setTimeout(() => {
+                isProgrammaticScroll = false;
+            }, 800);
         }
 
         function highlightCard(id) {
@@ -1368,33 +1366,82 @@
             setTimeout(() => { toast.style.display = 'none'; }, 2000);
         }
 
-        const observerOptions = {
-            root: null,
-            rootMargin: '-45% 0px -45% 0px', 
-            threshold: 0
-        };
-
-        // JS 滾動優化：加入防抖 (Debounce)
+        // --- NEW: JS-based Debounced Snap ---
         let scrollTimeout;
-        const scrollObserver = new IntersectionObserver((entries) => {
-            if (isTabSwitching) return; 
+        const SNAP_DELAY = 500; // 0.5s
 
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    const id = entry.target.id;
-                    
-                    // 1. 立即更新視覺效果 (無延遲)
-                    document.querySelectorAll('.active-highlight').forEach(el => el.classList.remove('active-highlight'));
-                    entry.target.classList.add('active-highlight');
+        window.addEventListener('scroll', () => {
+            // 1. Update ScrollSpy Immediately (Visual Feedback)
+            if (!isTabSwitching) {
+                 updateScrollSpy();
+            }
 
-                    // 2. 延遲更新網址 (Debounce)，避免快速滑動時卡頓
-                    clearTimeout(scrollTimeout);
-                    scrollTimeout = setTimeout(() => {
-                         history.replaceState(null, null, '#' + id);
-                    }, 500); // 停止滑動 0.5 秒後才更新網址
+            // 2. Handle Snapping (Delayed & Physical)
+            if (isProgrammaticScroll) return; // Don't snap if code is scrolling
+
+            clearTimeout(scrollTimeout);
+            scrollTimeout = setTimeout(() => {
+                snapToNearestCard();
+            }, SNAP_DELAY);
+        });
+
+        function updateScrollSpy() {
+            const cards = document.querySelectorAll('.tab-content:not(.hidden) .card, .tab-content:not(.hidden) .snap-point');
+            let activeCard = null;
+            
+            // Simple center detection
+            const center = window.innerHeight / 2;
+
+            for (const card of cards) {
+                const rect = card.getBoundingClientRect();
+                // Check if card overlaps the center line
+                if (rect.top <= center && rect.bottom >= center) {
+                    activeCard = card;
+                    break;
+                }
+            }
+
+            if (activeCard && activeCard.id) {
+                 // Only highlight cards with ID (timeline items)
+                 document.querySelectorAll('.active-highlight').forEach(el => el.classList.remove('active-highlight'));
+                 activeCard.classList.add('active-highlight');
+                 // Silent URL update
+                 history.replaceState(null, null, '#' + activeCard.id);
+            }
+        }
+
+        function snapToNearestCard() {
+            const headerOffset = 150; 
+            const cards = document.querySelectorAll('.tab-content:not(.hidden) .card, .tab-content:not(.hidden) .snap-point');
+            
+            let closestCard = null;
+            let minDistance = Infinity;
+
+            cards.forEach(card => {
+                const rect = card.getBoundingClientRect();
+                // Calculate distance from card top to snapping point (header bottom)
+                const distance = Math.abs(rect.top - headerOffset);
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    closestCard = card;
                 }
             });
-        }, observerOptions);
+
+            // If close enough (e.g. within 100px), snap to it. 
+            // If too far, user likely wants to be "between" cards, don't force snap.
+            if (closestCard && minDistance < 150) { 
+                const elementPosition = closestCard.getBoundingClientRect().top;
+                const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+
+                window.scrollTo({
+                    top: offsetPosition,
+                    behavior: 'smooth' 
+                });
+            }
+        }
+
+
+        // --- Standard Logic ---
 
         function openRouteModal(contentId) {
             const content = document.getElementById(contentId).innerHTML;
@@ -1464,15 +1511,6 @@
         document.addEventListener('DOMContentLoaded', () => {
             initCheckboxes();
             attachLightboxListeners();
-
-            document.querySelectorAll('div[id^="t-"]').forEach(section => {
-                scrollObserver.observe(section);
-            });
-            
-            // Also observe the header snap-point for consistent highlighting
-             document.querySelectorAll('.snap-point').forEach(section => {
-                scrollObserver.observe(section);
-            });
 
             const hash = window.location.hash.substring(1); 
             if (hash) {
