@@ -18,11 +18,11 @@
             line-height: 1.8;
             /* 恢復 iOS 觸底回彈 (Rubber banding) */
             overscroll-behavior-y: auto; 
+            overflow-x: hidden;
         }
 
-        /* 移除 CSS 磁吸，完全依賴 JS 延遲觸發，還原原生滑動慣性 */
         html {
-            /* scroll-snap-type: y proximity; <--- REMOVED */
+            /* 移除 CSS 磁吸，完全依賴 JS 控制 */
             scroll-padding-top: 160px;
             /* 讓滑動更順暢 */
             -webkit-overflow-scrolling: touch;
@@ -51,9 +51,6 @@
             position: relative;
             transform: scale(1);
             opacity: 0.95;
-            
-            /* 移除 CSS 對齊點，改由 JS 計算 */
-            /* scroll-snap-align: start; <--- REMOVED */
             
             overflow: visible; 
             transform: translateZ(0);
@@ -334,6 +331,17 @@
 
         .content-list li { margin-bottom: 8px; }
 
+        /* Animation */
+        @keyframes slideInRight {
+            from { opacity: 0; transform: translateX(30px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes slideInLeft {
+            from { opacity: 0; transform: translateX(-30px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        .anim-right { animation: slideInRight 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+        .anim-left { animation: slideInLeft 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
         @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
         @keyframes zoomIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
     </style>
@@ -1236,71 +1244,135 @@
     </div>
 
     <script>
-        // --- Lightbox Logic (Zoom & Pan) ---
-        let scale = 1;
-        let pointX = 0;
-        let pointY = 0;
-        let startX = 0;
-        let startY = 0;
-        let isDragging = false;
-        const img = document.getElementById('lightboxImg');
+        // --- 核心邏輯區 ---
+        
+        // 全域變數宣告 (防止 ReferenceError)
+        let scrollTimeout;
+        const SNAP_DELAY = 100; // 0.15s: 剛好在慣性減弱時觸發
+        let isUserInteracting = false;
+        let isTabSwitching = false;
+        let isProgrammaticScroll = false;
+        let scrollObserver; // 預先宣告
 
-        function toggleZoom(e) {
-            e.stopPropagation(); // Prevent closing lightbox
-            if (scale === 1) {
-                scale = 2.5;
-                img.classList.add('zoomed');
-            } else {
-                scale = 1;
-                pointX = 0;
-                pointY = 0;
-                img.classList.remove('zoomed');
-            }
-            updateTransform();
-        }
-
-        function startDrag(e) {
-            if (scale === 1) return;
-            isDragging = true;
-            startX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX;
-            startY = e.type.includes('mouse') ? e.clientY : e.touches[0].clientY;
-        }
-
-        function drag(e) {
-            if (!isDragging || scale === 1) return;
-            e.preventDefault();
-            const currentX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX;
-            const currentY = e.type.includes('mouse') ? e.clientY : e.touches[0].clientY;
-            const diffX = currentX - startX;
-            const diffY = currentY - startY;
-            
-            pointX += diffX;
-            pointY += diffY;
-            startX = currentX;
-            startY = currentY;
-            
-            updateTransform();
-        }
-
-        function endDrag() {
-            isDragging = false;
-        }
-
-        function updateTransform() {
-            img.style.transform = `scale(${scale}) translate(${pointX / scale}px, ${pointY / scale}px)`;
-        }
-
-        // --- Other Logic ---
         const tabs = document.querySelectorAll('.nav-item');
         const contents = document.querySelectorAll('.tab-content');
-        let isTabSwitching = false;
-        let isProgrammaticScroll = false; // Flag to detect clicks vs user scroll
+        const tabOrder = ['prep', 'feb1-meeting', 'feb2', 'feb3', 'feb4', 'feb5', 'feb6', 'feb7', 'feb8'];
 
+        // --- 1. 觸控干擾偵測 (Touch Interrupt) ---
+        // 只要使用者碰螢幕，就立刻取消所有磁吸倒數
+        window.addEventListener('touchstart', () => {
+            isUserInteracting = true;
+            clearTimeout(scrollTimeout); 
+        }, {passive: true});
+
+        window.addEventListener('touchmove', () => {
+            isUserInteracting = true;
+            clearTimeout(scrollTimeout);
+        }, {passive: true});
+
+        window.addEventListener('wheel', () => {
+            isUserInteracting = true;
+            clearTimeout(scrollTimeout);
+            // 滑鼠滾輪停止後一段時間視為結束互動
+            setTimeout(() => { isUserInteracting = false; }, 200);
+        }, {passive: true});
+
+        window.addEventListener('touchend', () => {
+            // 手指離開，給一點緩衝時間讓慣性跑一下，再把控制權交回 Scroll Event
+            setTimeout(() => { isUserInteracting = false; }, 50);
+        }, {passive: true});
+
+        // --- 2. 智慧滾動監聽 (Smart Scroll Spy) ---
+        window.addEventListener('scroll', () => {
+             // A. 視覺更新 (立即執行)
+             if (!isTabSwitching) {
+                 updateScrollSpy();
+             }
+
+             // B. 磁吸邏輯 (條件觸發)
+             if (isUserInteracting || isProgrammaticScroll || isTabSwitching) return;
+
+             clearTimeout(scrollTimeout);
+             scrollTimeout = setTimeout(snapToNearestCard, SNAP_DELAY);
+        });
+
+        function updateScrollSpy() {
+            // 包含時間軸卡片與標題卡片
+            const cards = document.querySelectorAll('.tab-content:not(.hidden) .card, .tab-content:not(.hidden) .snap-point');
+            let activeCard = null;
+            const center = window.innerHeight / 2;
+
+            for (const card of cards) {
+                const rect = card.getBoundingClientRect();
+                // 簡單的中心點判定
+                if (rect.top <= center && rect.bottom >= center) {
+                    activeCard = card;
+                    break;
+                }
+            }
+
+            if (activeCard && activeCard.id) {
+                 document.querySelectorAll('.active-highlight').forEach(el => el.classList.remove('active-highlight'));
+                 activeCard.classList.add('active-highlight');
+                 // 靜默更新網址，不觸發跳轉
+                 history.replaceState(null, null, '#' + activeCard.id);
+            }
+        }
+
+        function snapToNearestCard() {
+            const headerOffset = 150; 
+            const cards = document.querySelectorAll('.tab-content:not(.hidden) .card, .tab-content:not(.hidden) .snap-point');
+            
+            let closestCard = null;
+            let minDistance = Infinity;
+
+            cards.forEach(card => {
+                const rect = card.getBoundingClientRect();
+                const distance = Math.abs(rect.top - headerOffset);
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    closestCard = card;
+                }
+            });
+
+            // 只有當卡片非常接近對齊點 (例如 120px 內) 時才吸附，避免在快速滑動中間硬停
+            if (closestCard && minDistance < 120) { 
+                const elementPosition = closestCard.getBoundingClientRect().top;
+                const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+
+                window.scrollTo({
+                    top: offsetPosition,
+                    behavior: 'smooth' 
+                });
+            }
+        }
+
+        // --- 3. 頁籤切換 (含左右動畫) ---
         function switchTab(tabId) {
-            contents.forEach(content => content.classList.add('hidden'));
+            const currentTab = document.querySelector('.nav-item.active');
+            let prevIndex = -1;
+            if(currentTab) {
+                prevIndex = tabOrder.indexOf(currentTab.dataset.tab);
+            }
+            const newIndex = tabOrder.indexOf(tabId);
+
+            contents.forEach(content => {
+                content.classList.add('hidden');
+                content.classList.remove('anim-left', 'anim-right');
+            });
+
             const activeContent = document.getElementById(tabId);
             if (activeContent) {
                 activeContent.classList.remove('hidden');
+                
+                // 動畫方向判定
+                if(prevIndex !== -1 && newIndex > prevIndex) {
+                    activeContent.classList.add('anim-right');
+                } else if (prevIndex !== -1 && newIndex < prevIndex) {
+                    activeContent.classList.add('anim-left');
+                } else {
+                    activeContent.classList.add('anim-right'); // 預設
+                }
             }
 
             tabs.forEach(tab => {
@@ -1317,20 +1389,24 @@
         tabs.forEach(tab => tab.addEventListener('click', () => {
              isTabSwitching = true;
              isProgrammaticScroll = true;
+             
+             // 清除網址 hash 避免干擾
              history.pushState(null, null, ' ');
              document.querySelectorAll('.active-highlight').forEach(el => el.classList.remove('active-highlight'));
 
              switchTab(tab.dataset.tab);
              window.scrollTo({ top: 0, behavior: 'smooth' });
              
+             // 動畫結束後解鎖
              setTimeout(() => {
                 isTabSwitching = false;
                 isProgrammaticScroll = false;
-             }, 800);
+             }, 600);
         }));
 
+        // --- 4. 錨點跳轉 (Deep Linking) ---
         function setAnchor(id) {
-            isProgrammaticScroll = true; // Lock snap logic
+            isProgrammaticScroll = true;
             history.pushState(null, null, '#' + id);
             highlightCard(id);
             const url = window.location.href;
@@ -1338,7 +1414,6 @@
                 showToast();
             });
 
-            // Unlock after animation approx time
             setTimeout(() => {
                 isProgrammaticScroll = false;
             }, 800);
@@ -1366,83 +1441,59 @@
             setTimeout(() => { toast.style.display = 'none'; }, 2000);
         }
 
-        // --- NEW: JS-based Debounced Snap ---
-        let scrollTimeout;
-        const SNAP_DELAY = 500; // 0.5s
+        // --- 5. Lightbox Logic (Zoom & Pan) ---
+        let scale = 1;
+        let pointX = 0;
+        let pointY = 0;
+        let startX = 0;
+        let startY = 0;
+        let isDragging = false;
+        const img = document.getElementById('lightboxImg');
 
-        window.addEventListener('scroll', () => {
-            // 1. Update ScrollSpy Immediately (Visual Feedback)
-            if (!isTabSwitching) {
-                 updateScrollSpy();
+        function toggleZoom(e) {
+            e.stopPropagation();
+            if (scale === 1) {
+                scale = 2.5;
+                img.classList.add('zoomed');
+            } else {
+                scale = 1;
+                pointX = 0;
+                pointY = 0;
+                img.classList.remove('zoomed');
             }
-
-            // 2. Handle Snapping (Delayed & Physical)
-            if (isProgrammaticScroll) return; // Don't snap if code is scrolling
-
-            clearTimeout(scrollTimeout);
-            scrollTimeout = setTimeout(() => {
-                snapToNearestCard();
-            }, SNAP_DELAY);
-        });
-
-        function updateScrollSpy() {
-            const cards = document.querySelectorAll('.tab-content:not(.hidden) .card, .tab-content:not(.hidden) .snap-point');
-            let activeCard = null;
-            
-            // Simple center detection
-            const center = window.innerHeight / 2;
-
-            for (const card of cards) {
-                const rect = card.getBoundingClientRect();
-                // Check if card overlaps the center line
-                if (rect.top <= center && rect.bottom >= center) {
-                    activeCard = card;
-                    break;
-                }
-            }
-
-            if (activeCard && activeCard.id) {
-                 // Only highlight cards with ID (timeline items)
-                 document.querySelectorAll('.active-highlight').forEach(el => el.classList.remove('active-highlight'));
-                 activeCard.classList.add('active-highlight');
-                 // Silent URL update
-                 history.replaceState(null, null, '#' + activeCard.id);
-            }
+            updateTransform();
         }
 
-        function snapToNearestCard() {
-            const headerOffset = 150; 
-            const cards = document.querySelectorAll('.tab-content:not(.hidden) .card, .tab-content:not(.hidden) .snap-point');
-            
-            let closestCard = null;
-            let minDistance = Infinity;
-
-            cards.forEach(card => {
-                const rect = card.getBoundingClientRect();
-                // Calculate distance from card top to snapping point (header bottom)
-                const distance = Math.abs(rect.top - headerOffset);
-                if (distance < minDistance) {
-                    minDistance = distance;
-                    closestCard = card;
-                }
-            });
-
-            // If close enough (e.g. within 100px), snap to it. 
-            // If too far, user likely wants to be "between" cards, don't force snap.
-            if (closestCard && minDistance < 150) { 
-                const elementPosition = closestCard.getBoundingClientRect().top;
-                const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
-
-                window.scrollTo({
-                    top: offsetPosition,
-                    behavior: 'smooth' 
-                });
-            }
+        function startDrag(e) {
+            if (scale === 1) return;
+            isDragging = true;
+            startX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX;
+            startY = e.type.includes('mouse') ? e.clientY : e.touches[0].clientY;
         }
 
+        function drag(e) {
+            if (!isDragging || scale === 1) return;
+            e.preventDefault();
+            const currentX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX;
+            const currentY = e.type.includes('mouse') ? e.clientY : e.touches[0].clientY;
+            const diffX = currentX - startX;
+            const diffY = currentY - startY;
+            pointX += diffX;
+            pointY += diffY;
+            startX = currentX;
+            startY = currentY;
+            updateTransform();
+        }
 
-        // --- Standard Logic ---
+        function endDrag() {
+            isDragging = false;
+        }
 
+        function updateTransform() {
+            img.style.transform = `scale(${scale}) translate(${pointX / scale}px, ${pointY / scale}px)`;
+        }
+
+        // --- 6. Modals & Checkboxes ---
         function openRouteModal(contentId) {
             const content = document.getElementById(contentId).innerHTML;
             const modalBody = document.getElementById('modalBody');
@@ -1508,9 +1559,32 @@
             }
         }
 
+        // --- Init ---
         document.addEventListener('DOMContentLoaded', () => {
             initCheckboxes();
             attachLightboxListeners();
+
+            // Initialize Observer
+            scrollObserver = new IntersectionObserver((entries) => {
+                if (isTabSwitching) return;
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const id = entry.target.id;
+                        // Silent update
+                        history.replaceState(null, null, '#' + id);
+                        document.querySelectorAll('.active-highlight').forEach(el => el.classList.remove('active-highlight'));
+                        entry.target.classList.add('active-highlight');
+                    }
+                });
+            }, {
+                root: null,
+                rootMargin: '-45% 0px -45% 0px', 
+                threshold: 0
+            });
+
+            document.querySelectorAll('.card, .snap-point').forEach(section => {
+                scrollObserver.observe(section);
+            });
 
             const hash = window.location.hash.substring(1); 
             if (hash) {
